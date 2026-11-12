@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ระบบติดตามการเข้าเรียน</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <h2>🎓 ระบบติดตาม<br>การเข้าเรียน</h2>
+      <p>Student Attendance</p>
+    </div>
+    <nav>
+      <div class="nav-section">เมนูหลัก</div>
+      <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard',this)">
+        <span class="icon">📊</span><span>แดชบอร์ด</span>
+      </div>
+      <div class="nav-item" data-page="attendance" onclick="switchPage('attendance',this)">
+        <span class="icon">📋</span><span>ข้อมูลการเข้าเรียน</span>
+      </div>
+      <div class="nav-section">วิเคราะห์</div>
+      <div class="nav-item" data-page="errors" onclick="switchPage('errors',this)">
+        <span class="icon">⚠️</span><span>ข้อผิดพลาด & เหตุผล</span>
+      </div>
+      <div class="nav-item" data-page="summary" onclick="switchPage('summary',this)">
+        <span class="icon">📑</span><span>สรุปข้อมูล</span>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <div id="main">
+    <div id="topbar">
+      <h1 id="page-title">แดชบอร์ดภาพรวม</h1>
+      <span class="badge-time" id="clock"></span>
+    </div>
+    <div id="content">
+
+      <!-- ===== PAGE: DASHBOARD ===== -->
+      <div id="page-dashboard" class="page active">
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+          <div class="filter-group">
+            <label>ห้องเรียน</label>
+            <select id="f-room-dash">
+              <option value="">ทั้งหมด</option>
+              <option>ปวช.1/1</option>
+              <option>ปวช.1/2</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>วิชา</label>
+            <select id="f-subject-dash">
+              <option value="">ทั้งหมด</option>
+              <option>การเขียนโปรแกรม</option>
+              <option>ฐานข้อมูล</option>
+              <option>การสร้างเว็บไซต์</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>วันที่เริ่ม</label>
+            <input type="date" id="f-date-start" value="2026-11-02" />
+          </div>
+          <div class="filter-group">
+            <label>วันที่สิ้นสุด</label>
+            <input type="date" id="f-date-end" value="2026-11-09" />
+          </div>
+          <button class="btn btn-primary" onclick="applyDashFilter()">🔍 กรองข้อมูล</button>
+          <button class="btn btn-secondary" onclick="resetDashFilter()">↺ รีเซ็ต</button>
+        </div>
+
+        <!-- KPI -->
+        <div class="kpi-grid" id="kpi-grid">
+          <div class="kpi-card green">
+            <div class="kpi-label">มาเรียน</div>
+            <div class="kpi-value" id="kpi-present">-</div>
+            <div class="kpi-sub" id="kpi-present-pct">-</div>
+          </div>
+          <div class="kpi-card red">
+            <div class="kpi-label">ขาดเรียน</div>
+            <div class="kpi-value" id="kpi-absent">-</div>
+            <div class="kpi-sub" id="kpi-absent-pct">-</div>
+          </div>
+          <div class="kpi-card yellow">
+            <div class="kpi-label">มาสาย</div>
+            <div class="kpi-value" id="kpi-late">-</div>
+            <div class="kpi-sub" id="kpi-late-pct">-</div>
+          </div>
+          <div class="kpi-card blue">
+            <div class="kpi-label">ลา</div>
+            <div class="kpi-value" id="kpi-leave">-</div>
+            <div class="kpi-sub" id="kpi-leave-pct">-</div>
+          </div>
+          <div class="kpi-card green">
+            <div class="kpi-label">ส่งงานแล้ว</div>
+            <div class="kpi-value" id="kpi-submitted">-</div>
+            <div class="kpi-sub" id="kpi-submitted-pct">-</div>
+          </div>
+          <div class="kpi-card red">
+            <div class="kpi-label">ยังไม่ส่งงาน</div>
+            <div class="kpi-value" id="kpi-not-submitted">-</div>
+            <div class="kpi-sub" id="kpi-ns-pct">-</div>
+          </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="chart-grid">
+          <div class="chart-card">
+            <h3>📊 สัดส่วนสถานะเข้าเรียน (กราฟวงกลม)</h3>
+            <div class="chart-wrap"><canvas id="chart-pie-status"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3>📊 สัดส่วนการส่งงาน (กราฟวงกลม)</h3>
+            <div class="chart-wrap"><canvas id="chart-pie-submit"></canvas></div>
+          </div>
+          <div class="chart-card full">
+            <h3>📊 สถานะเข้าเรียนแยกตามวิชา (กราฟแท่ง)</h3>
+            <div class="chart-wrap"><canvas id="chart-bar-subject"></canvas></div>
+          </div>
+          <div class="chart-card full">
+            <h3>📊 สถานะเข้าเรียนแยกตามวันที่ (กราฟแท่ง)</h3>
+            <div class="chart-wrap"><canvas id="chart-bar-date"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3>📊 เปรียบเทียบห้องเรียน (กราฟแท่ง)</h3>
+            <div class="chart-wrap"><canvas id="chart-bar-room"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <h3>📊 การส่งงานแยกตามวิชา (กราฟแท่ง)</h3>
+            <div class="chart-wrap"><canvas id="chart-bar-submit-subject"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: ATTENDANCE TABLE ===== -->
+      <div id="page-attendance" class="page">
+        <div class="filter-bar">
+          <div class="filter-group">
+            <label>ห้องเรียน</label>
+            <select id="f-room-tbl">
+              <option value="">ทั้งหมด</option>
+              <option>ปวช.1/1</option>
+              <option>ปวช.1/2</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>วิชา</label>
+            <select id="f-subject-tbl">
+              <option value="">ทั้งหมด</option>
+              <option>การเขียนโปรแกรม</option>
+              <option>ฐานข้อมูล</option>
+              <option>การสร้างเว็บไซต์</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>สถานะเข้าเรียน</label>
+            <select id="f-status-tbl">
+              <option value="">ทั้งหมด</option>
+              <option>มาเรียน</option>
+              <option>ขาด</option>
+              <option>สาย</option>
+              <option>ลา</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>รหัสนักเรียน</label>
+            <input type="text" id="f-student-tbl" placeholder="เช่น S001" />
+          </div>
+          <button class="btn btn-primary" onclick="applyTableFilter()">🔍 กรองข้อมูล</button>
+          <button class="btn btn-secondary" onclick="resetTableFilter()">↺ รีเซ็ต</button>
+        </div>
+        <div class="table-card">
+          <h3>รายละเอียดข้อมูลการเข้าเรียน (<span id="tbl-count">-</span> รายการ)</h3>
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>รหัสบันทึก</th>
+                  <th>วันที่</th>
+                  <th>รหัสนักเรียน</th>
+                  <th>ห้องเรียน</th>
+                  <th>วิชา</th>
+                  <th>สถานะ</th>
+                  <th>นาทีที่สาย</th>
+                  <th>ชั่วโมง</th>
+                  <th>ส่งงาน</th>
+                </tr>
+              </thead>
+              <tbody id="tbl-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: ERRORS ===== -->
+      <div id="page-errors" class="page">
+        <div id="error-summary-cards"></div>
+        <div class="table-card">
+          <h3>🗂️ รายการข้อมูลที่มีปัญหาทั้งหมด</h3>
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>รหัสบันทึก</th>
+                  <th>ประเภทข้อผิดพลาด</th>
+                  <th>รายละเอียด</th>
+                  <th>เหตุผล/แนวทางแก้ไข</th>
+                </tr>
+              </thead>
+              <tbody id="error-tbl-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: SUMMARY ===== -->
+      <div id="page-summary" class="page">
+        <div class="kpi-grid" id="summary-kpi"></div>
+        <div class="summary-grid">
+          <div class="summary-card">
+            <h3>📊 สรุปสถานะการเข้าเรียน</h3>
+            <div id="summary-status"></div>
+          </div>
+          <div class="summary-card">
+            <h3>📊 สรุปการส่งงาน</h3>
+            <div id="summary-submit"></div>
+          </div>
+          <div class="summary-card">
+            <h3>📊 สรุปแยกตามห้องเรียน</h3>
+            <div id="summary-room"></div>
+          </div>
+          <div class="summary-card">
+            <h3>📊 สรุปแยกตามวิชา</h3>
+            <div id="summary-subject"></div>
+          </div>
+        </div>
+        <div class="table-card">
+          <h3>📋 สรุปรายนักเรียน</h3>
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>รหัสนักเรียน</th>
+                  <th>มาเรียน</th>
+                  <th>ขาด</th>
+                  <th>สาย</th>
+                  <th>ลา</th>
+                  <th>ส่งงานแล้ว</th>
+                  <th>ยังไม่ส่ง</th>
+                  <th>% การมา</th>
+                  <th>สถานะ</th>
+                </tr>
+              </thead>
+              <tbody id="summary-student-tbl"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+
+  <script>
+    // =====================================================================
+    // RAW DATA (embedded from CSV)
+    // =====================================================================
+    const RAW_DATA = [
+      { id: "A001", date: "2026-11-02", student: "S001", room: "ปวช.1/1", subject: "การเขียนโปรแกรม", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A002", date: "2026-11-02", student: "S002", room: "ปวช.1/1", subject: "การเขียนโปรแกรม", status: "มาเรียน", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A003", date: "2026-11-02", student: "S003", room: "ปวช.1/1", subject: "การเขียนโปรแกรม", status: "ขาด", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A004", date: "2026-11-02", student: "S004", room: "ปวช.1/1", subject: "การเขียนโปรแกรม", status: "สาย", late: 15, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A005", date: "2026-11-02", student: "S005", room: "ปวช.1/1", subject: "การเขียนโปรแกรม", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A006", date: "2026-11-02", student: "S006", room: "ปวช.1/2", subject: "การเขียนโปรแกรม", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A007", date: "2026-11-02", student: "S007", room: "ปวช.1/2", subject: "การเขียนโปรแกรม", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A008", date: "2026-11-02", student: "S008", room: "ปวช.1/2", subject: "การเขียนโปรแกรม", status: "ลา", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A009", date: "2026-11-02", student: "S009", room: "ปวช.1/2", subject: "การเขียนโปรแกรม", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },  // trimmed whitespace
+      { id: "A010", date: "2026-11-02", student: "S010", room: "ปวช.1/2", subject: "การเขียนโปรแกรม", status: "ลา", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A011", date: "2026-11-03", student: "S001", room: "ปวช.1/1", subject: "ฐานข้อมูล", status: "สาย", late: 5, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A012", date: "2026-11-03", student: "S002", room: "ปวช.1/1", subject: "ฐานข้อมูล", status: "ขาด", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A013", date: "2026-11-03", student: "S003", room: "ปวช.1/1", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A014", date: "2026-11-03", student: "S004", room: "ปวช.1/1", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A015", date: "2026-11-03", student: "S005", room: "ปวช.1/1", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A016", date: "2026-11-03", student: "S006", room: "ปวช.1/2", subject: "ฐานข้อมูล", status: "ขาด", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A017", date: "2026-11-03", student: "S007", room: "ปวช.1/2", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 2, submit: "ยังไม่ส่ง" }, // blank submit → ยังไม่ส่ง
+      { id: "A018", date: "2026-11-03", student: "S008", room: "ปวช.1/2", subject: "ฐานข้อมูล", status: "ลา", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A019", date: "2026-11-03", student: "S009", room: "ปวช.1/2", subject: "ฐานข้อมูล", status: "สาย", late: 10, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A020", date: "2026-11-03", student: "S010", room: "ปวช.1/2", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A021", date: "2026-11-04", student: "S001", room: "ปวช.1/1", subject: "การสร้างเว็บไซต์", status: "สาย", late: 30, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A022", date: "2026-11-04", student: "S002", room: "ปวช.1/1", subject: "การสร้างเว็บไซต์", status: "ขาด", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A023", date: "2026-11-04", student: "S003", room: "ปวช.1/1", subject: "การสร้างเว็บไซต์", status: "ขาด", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A024", date: "2026-11-04", student: "S004", room: "ปวช.1/1", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A025", date: "2026-11-04", student: "S005", room: "ปวช.1/1", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A026", date: "2026-11-04", student: "S006", room: "ปวช.1/2", subject: "การสร้างเว็บไซต์", status: "สาย", late: -10, hours: 2, submit: "ส่งแล้ว" }, // negative late
+      { id: "A027", date: "2026-11-04", student: "S007", room: "ปวช.1/2", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A028", date: "2026-11-04", student: "S008", room: "ปวช.1/2", subject: "การสร้างเว็บไซต์", status: "ขาด", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A029", date: "2026-11-04", student: "S009", room: "ปวช.1/2", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A030", date: "2026-11-04", student: "S010", room: "ปวช.1/2", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A031", date: "2026-11-05", student: "S001", room: "ปวช.1/1", subject: "การเขียนโปรแกรม", status: "ขาด", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A032", date: "2026-11-05", student: "S002", room: "ปวช.1/1", subject: "การเขียนโปรแกรม", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A033", date: "2026-11-05", student: "S003", room: "ปวช.1/1", subject: "การเขียนโปรแกรม", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A034", date: "2026-11-05", student: "S004", room: "ปวช.1/1", subject: "การเขียนโปรแกรม", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A035", date: "2026-11-05", student: "S005", room: "ปวช.1/1", subject: "การเขียนโปรแกรม", status: "สาย", late: 0, hours: 2, submit: "ยังไม่ส่ง" }, // สาย แต่ late=0
+      { id: "A036", date: "2026-11-05", student: "S006", room: "ปวช.1/2", subject: "การเขียนโปรแกรม", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A037", date: "2026-11-05", student: "S007", room: "ปวช.1/2", subject: "การเขียนโปรแกรม", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A038", date: "2026-11-05", student: "S008", room: "ปวช.1/2", subject: "การเขียนโปรแกรม", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A039", date: "2026-11-05", student: "S009", room: "ปวช.1/2", subject: "การเขียนโปรแกรม", status: "สาย", late: 10, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A040", date: "2026-11-05", student: "S010", room: "ปวช.1/2", subject: "การเขียนโปรแกรม", status: "สาย", late: 20, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A041", date: "2026-11-06", student: "S001", room: "ปวช.1/1", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A042", date: "2026-11-06", student: "S002", room: "ปวช.1/1", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A043", date: "2026-11-06", student: "S003", room: "ปวช.1/1", subject: "ฐานข้อมูล", status: "สาย", late: 20, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A044", date: "2026-11-06", student: "S004", room: "ปวช.1/1", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 25, submit: "ส่งแล้ว" }, // hours=25 (error)
+      { id: "A045", date: "2026-11-06", student: "S005", room: "ปวช.1/1", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A046", date: "2026-11-06", student: "S006", room: "ปวช.1/2", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A047", date: "2026-11-06", student: "S007", room: "ปวช.1/2", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A048", date: "2026-11-06", student: "S008", room: "ปวช.1/2", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A049", date: "2026-11-06", student: "S009", room: "ปวช.1/2", subject: "ฐานข้อมูล", status: "สาย", late: 30, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A050", date: "2026-11-06", student: "S010", room: "ปวช.1/2", subject: "ฐานข้อมูล", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A051", date: "2026-11-09", student: "S001", room: "ปวช.1/1", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A052", date: "2026-11-09", student: "S002", room: "ปวช.1/1", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A052", date: "2026-11-09", student: "S002", room: "ปวช.1/1", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" }, // duplicate A052
+      { id: "A054", date: "2026-11-09", student: "S004", room: "ปวช.1/1", subject: "การสร้างเว็บไซต์", status: "ลา", late: 0, hours: 2, submit: "ยังไม่ส่ง" },
+      { id: "A055", date: "2026-11-09", student: "S005", room: "ปวช.1/1", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A056", date: "2026-11-09", student: "S006", room: "ปวช.1/2", subject: "การสร้างเว็บไซต์", status: "สาย", late: 30, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A057", date: "2026-11-09", student: "S007", room: "ปวช.1/2", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A058", date: "2026-11-09", student: "S008", room: "ปวช.1/2", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A059", date: "2026-11-09", student: "S009", room: "ปวช.1/2", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+      { id: "A060", date: "2026-11-09", student: "S010", room: "ปวช.1/2", subject: "การสร้างเว็บไซต์", status: "มาเรียน", late: 0, hours: 2, submit: "ส่งแล้ว" },
+    ];
+
+    // =====================================================================
+    // ERROR DETECTION
+    // =====================================================================
+    const ERRORS = [];
+    const idSeen = {};
+    RAW_DATA.forEach(r => {
+      // 1. Duplicate record ID
+      if (idSeen[r.id]) {
+        ERRORS.push({ id: r.id, type: "รหัสบันทึกซ้ำ", detail: `รหัสบันทึก ${r.id} ปรากฏมากกว่าหนึ่งครั้ง (นักเรียน ${r.student} วันที่ ${r.date})`, reason: "อาจเกิดจากการบันทึกข้อมูลซ้ำ หรือระบบบันทึกค่าอัตโนมัติผิดพลาด ควรลบรายการซ้ำออกและตรวจสอบ ID ให้ถูกต้อง" });
+      } else {
+        idSeen[r.id] = true;
+      }
+      // 2. Negative late minutes
+      if (r.late < 0) {
+        ERRORS.push({ id: r.id, type: "นาทีที่สายเป็นค่าลบ", detail: `รหัสบันทึก ${r.id} (${r.student}) มีนาทีที่สาย = ${r.late}`, reason: "ค่านาทีที่สายไม่สามารถเป็นค่าลบได้ อาจเกิดจากการพิมพ์ผิด ควรแก้ไขเป็น 0 หรือค่าที่ถูกต้อง" });
+      }
+      // 3. Abnormal hours
+      if (r.hours > 10 || r.hours <= 0) {
+        ERRORS.push({ id: r.id, type: "ชั่วโมงเรียนผิดปกติ", detail: `รหัสบันทึก ${r.id} (${r.student}) มีชั่วโมงเรียน = ${r.hours} ชั่วโมง`, reason: "ชั่วโมงเรียนเกินขอบเขตปกติ (1-10 ชั่วโมง) อาจเกิดจากการพิมพ์ผิด ควรตรวจสอบและแก้ไขข้อมูล" });
+      }
+      // 4. Status=สาย แต่ late=0
+      if (r.status === "สาย" && r.late === 0) {
+        ERRORS.push({ id: r.id, type: "สถานะ 'สาย' แต่นาที=0", detail: `รหัสบันทึก ${r.id} (${r.student}) มีสถานะ 'สาย' แต่นาทีที่สาย = 0`, reason: "ถ้าสถานะเป็น 'สาย' ควรมีจำนวนนาทีที่มากกว่า 0 อาจลืมบันทึกจำนวนนาที หรือสถานะผิด" });
+      }
+      // 5. Missing submit (blank originally A017)
+      // already handled as ยังไม่ส่ง, but we flag A017
+      if (r.id === "A017") {
+        ERRORS.push({ id: r.id, type: "ข้อมูลสถานะส่งงานว่างเปล่า", detail: `รหัสบันทึก ${r.id} (${r.student}) ไม่มีข้อมูลในช่องสถานะส่งงาน`, reason: "ช่องสถานะส่งงานเว้นว่างไว้ ระบบกำหนดค่าเป็น 'ยังไม่ส่ง' โดยอัตโนมัติ ควรตรวจสอบข้อมูลจริงกับครูผู้สอน" });
+      }
+      // 6. รหัสบันทึก A053 missing (gap between A052 and A054)
+    });
+
+    // Flag missing A053
+    ERRORS.push({ id: "A053", type: "รหัสบันทึกขาดหาย (A053)", detail: "รหัสบันทึก A053 ขาดหายไปจากลำดับ (มี A052 และ A054 แต่ไม่มี A053)", reason: "อาจเกิดจากการลบข้อมูลโดยไม่ตั้งใจ หรือระบบข้ามรหัสนี้ไป ควรตรวจสอบข้อมูลต้นฉบับ" });
+
+    // =====================================================================
+    // CHART INSTANCES REGISTRY
+    // =====================================================================
+    const charts = {};
+
+    function destroyChart(id) {
+      if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+    }
+
+    // =====================================================================
+    // COLORS
+    // =====================================================================
+    const COLOR_STATUS = {
+      "มาเรียน": "#34a853",
+      "ขาด": "#ea4335",
+      "สาย": "#fbbc05",
+      "ลา": "#4285f4",
+    };
+
+    // =====================================================================
+    // FILTER + COMPUTE
+    // =====================================================================
+    function getFiltered(opts = {}) {
+      let d = [...RAW_DATA];
+      if (opts.room) d = d.filter(r => r.room === opts.room);
+      if (opts.subject) d = d.filter(r => r.subject === opts.subject);
+      if (opts.dateStart) d = d.filter(r => r.date >= opts.dateStart);
+      if (opts.dateEnd) d = d.filter(r => r.date <= opts.dateEnd);
+      if (opts.status) d = d.filter(r => r.status === opts.status);
+      if (opts.student) d = d.filter(r => r.student.toLowerCase().includes(opts.student.toLowerCase()));
+      return d;
+    }
+
+    function countBy(data, key) {
+      const m = {};
+      data.forEach(r => { m[r[key]] = (m[r[key]] || 0) + 1; });
+      return m;
+    }
+
+    // =====================================================================
+    // DASHBOARD
+    // =====================================================================
+    let dashOpts = {};
+
+    function applyDashFilter() {
+      dashOpts = {
+        room: document.getElementById('f-room-dash').value,
+        subject: document.getElementById('f-subject-dash').value,
+        dateStart: document.getElementById('f-date-start').value,
+        dateEnd: document.getElementById('f-date-end').value,
+      };
+      renderDashboard();
+    }
+
+    function resetDashFilter() {
+      document.getElementById('f-room-dash').value = '';
+      document.getElementById('f-subject-dash').value = '';
+      document.getElementById('f-date-start').value = '2026-11-02';
+      document.getElementById('f-date-end').value = '2026-11-09';
+      dashOpts = {};
+      renderDashboard();
+    }
+
+    function renderDashboard() {
+      const data = getFiltered(dashOpts);
+      const total = data.length;
+      const statusCount = countBy(data, 'status');
+      const submitCount = countBy(data, 'submit');
+
+      const present = statusCount['มาเรียน'] || 0;
+      const absent = statusCount['ขาด'] || 0;
+      const late = statusCount['สาย'] || 0;
+      const leave = statusCount['ลา'] || 0;
+      const submitted = submitCount['ส่งแล้ว'] || 0;
+      const notSub = total - submitted;
+
+      const pct = v => total ? Math.round(v / total * 100) + '%' : '0%';
+
+      document.getElementById('kpi-present').textContent = present;
+      document.getElementById('kpi-present-pct').textContent = pct(present) + ' ของทั้งหมด';
+      document.getElementById('kpi-absent').textContent = absent;
+      document.getElementById('kpi-absent-pct').textContent = pct(absent) + ' ของทั้งหมด';
+      document.getElementById('kpi-late').textContent = late;
+      document.getElementById('kpi-late-pct').textContent = pct(late) + ' ของทั้งหมด';
+      document.getElementById('kpi-leave').textContent = leave;
+      document.getElementById('kpi-leave-pct').textContent = pct(leave) + ' ของทั้งหมด';
+      document.getElementById('kpi-submitted').textContent = submitted;
+      document.getElementById('kpi-submitted-pct').textContent = pct(submitted) + ' ของทั้งหมด';
+      document.getElementById('kpi-not-submitted').textContent = notSub;
+      document.getElementById('kpi-ns-pct').textContent = pct(notSub) + ' ของทั้งหมด';
+
+      // --- Pie: Status ---
+      destroyChart('pie-status');
+      charts['pie-status'] = new Chart(document.getElementById('chart-pie-status'), {
+        type: 'doughnut',
+        data: {
+          labels: ['มาเรียน', 'ขาด', 'สาย', 'ลา'],
+          datasets: [{
+            data: [present, absent, late, leave],
+            backgroundColor: ['#34a853', '#ea4335', '#fbbc05', '#4285f4'],
+            borderWidth: 2, borderColor: '#fff'
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+      });
+
+      // --- Pie: Submit ---
+      destroyChart('pie-submit');
+      charts['pie-submit'] = new Chart(document.getElementById('chart-pie-submit'), {
+        type: 'doughnut',
+        data: {
+          labels: ['ส่งแล้ว', 'ยังไม่ส่ง'],
+          datasets: [{
+            data: [submitted, notSub],
+            backgroundColor: ['#34a853', '#ea4335'],
+            borderWidth: 2, borderColor: '#fff'
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+      });
+
+      // --- Bar: By Subject ---
+      const subjects = [...new Set(data.map(r => r.subject))].sort();
+      const statusKeys = ['มาเรียน', 'ขาด', 'สาย', 'ลา'];
+      const subjectDatasets = statusKeys.map(s => ({
+        label: s,
+        data: subjects.map(sub => data.filter(r => r.subject === sub && r.status === s).length),
+        backgroundColor: COLOR_STATUS[s],
+      }));
+      destroyChart('bar-subject');
+      charts['bar-subject'] = new Chart(document.getElementById('chart-bar-subject'), {
+        type: 'bar',
+        data: { labels: subjects, datasets: subjectDatasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'top' } },
+          scales: { x: { stacked: false }, y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        }
+      });
+
+      // --- Bar: By Date ---
+      const dates = [...new Set(data.map(r => r.date))].sort();
+      const dateDatasets = statusKeys.map(s => ({
+        label: s,
+        data: dates.map(dt => data.filter(r => r.date === dt && r.status === s).length),
+        backgroundColor: COLOR_STATUS[s],
+      }));
+      destroyChart('bar-date');
+      charts['bar-date'] = new Chart(document.getElementById('chart-bar-date'), {
+        type: 'bar',
+        data: { labels: dates, datasets: dateDatasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'top' } },
+          scales: { x: { stacked: false }, y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        }
+      });
+
+      // --- Bar: By Room ---
+      const rooms = [...new Set(data.map(r => r.room))].sort();
+      const roomDatasets = statusKeys.map(s => ({
+        label: s,
+        data: rooms.map(rm => data.filter(r => r.room === rm && r.status === s).length),
+        backgroundColor: COLOR_STATUS[s],
+      }));
+      destroyChart('bar-room');
+      charts['bar-room'] = new Chart(document.getElementById('chart-bar-room'), {
+        type: 'bar',
+        data: { labels: rooms, datasets: roomDatasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'top' } },
+          scales: { x: { stacked: false }, y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        }
+      });
+
+      // --- Bar: Submit by Subject ---
+      const subSubmitDatasets = [
+        { label: 'ส่งแล้ว', data: subjects.map(sub => data.filter(r => r.subject === sub && r.submit === 'ส่งแล้ว').length), backgroundColor: '#34a853' },
+        { label: 'ยังไม่ส่ง', data: subjects.map(sub => data.filter(r => r.subject === sub && r.submit !== 'ส่งแล้ว').length), backgroundColor: '#ea4335' },
+      ];
+      destroyChart('bar-submit-subject');
+      charts['bar-submit-subject'] = new Chart(document.getElementById('chart-bar-submit-subject'), {
+        type: 'bar',
+        data: { labels: subjects, datasets: subSubmitDatasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'top' } },
+          scales: { x: { stacked: false }, y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        }
+      });
+    }
+
+    // =====================================================================
+    // ATTENDANCE TABLE
+    // =====================================================================
+    let tableOpts = {};
+
+    function applyTableFilter() {
+      tableOpts = {
+        room: document.getElementById('f-room-tbl').value,
+        subject: document.getElementById('f-subject-tbl').value,
+        status: document.getElementById('f-status-tbl').value,
+        student: document.getElementById('f-student-tbl').value,
+      };
+      renderTable();
+    }
+
+    function resetTableFilter() {
+      document.getElementById('f-room-tbl').value = '';
+      document.getElementById('f-subject-tbl').value = '';
+      document.getElementById('f-status-tbl').value = '';
+      document.getElementById('f-student-tbl').value = '';
+      tableOpts = {};
+      renderTable();
+    }
+
+    function statusPill(s) {
+      const map = {
+        'มาเรียน': 'pill-green',
+        'ขาด': 'pill-red',
+        'สาย': 'pill-yellow',
+        'ลา': 'pill-blue',
+      };
+      return `<span class="pill ${map[s] || 'pill-gray'}">${s}</span>`;
+    }
+
+    function submitPill(s) {
+      return s === 'ส่งแล้ว'
+        ? `<span class="pill pill-green">ส่งแล้ว</span>`
+        : `<span class="pill pill-red">ยังไม่ส่ง</span>`;
+    }
+
+    function renderTable() {
+      const data = getFiltered(tableOpts);
+      const tbody = document.getElementById('tbl-body');
+      document.getElementById('tbl-count').textContent = data.length;
+      tbody.innerHTML = data.map(r => `
+    <tr>
+      <td>${r.id}</td>
+      <td>${r.date}</td>
+      <td><b>${r.student}</b></td>
+      <td>${r.room}</td>
+      <td>${r.subject}</td>
+      <td>${statusPill(r.status)}</td>
+      <td style="color:${r.late < 0 ? 'red' : 'inherit'}">${r.late} ${r.late < 0 ? '⚠️' : ''}</td>
+      <td style="color:${r.hours > 10 ? 'red' : 'inherit'}">${r.hours} ${r.hours > 10 ? '⚠️' : ''}</td>
+      <td>${submitPill(r.submit)}</td>
+    </tr>
+  `).join('');
+    }
+
+    // =====================================================================
+    // ERRORS PAGE
+    // =====================================================================
+    function renderErrors() {
+      // Summary cards
+      const types = [...new Set(ERRORS.map(e => e.type))];
+      const container = document.getElementById('error-summary-cards');
+      const iconMap = {
+        'รหัสบันทึกซ้ำ': '🔁',
+        'นาทีที่สายเป็นค่าลบ': '📉',
+        'ชั่วโมงเรียนผิดปกติ': '⏱️',
+        "สถานะ 'สาย' แต่นาที=0": '❓',
+        'ข้อมูลสถานะส่งงานว่างเปล่า': '📭',
+        'รหัสบันทึกขาดหาย (A053)': '🔍',
+      };
+
+      container.innerHTML = `
+    <div class="error-card">
+      <h3>⚠️ สรุปข้อผิดพลาดที่พบในข้อมูล (${ERRORS.length} รายการ)</h3>
+      ${ERRORS.map(e => `
+        <div class="error-row">
+          <div class="error-icon">${iconMap[e.type] || '⚠️'}</div>
+          <div class="error-body">
+            <div class="error-title">${e.type}</div>
+            <div class="error-desc">📌 ${e.detail}</div>
+            <div class="error-rec">✅ แนวทางแก้ไข: ${e.reason}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+      // Error table
+      const tbody = document.getElementById('error-tbl-body');
+      tbody.innerHTML = ERRORS.map(e => `
+    <tr>
+      <td><b>${e.id}</b></td>
+      <td><span class="pill pill-red">${e.type}</span></td>
+      <td style="font-size:12px;color:#5f6368">${e.detail}</td>
+      <td style="font-size:12px;color:#137333">${e.reason}</td>
+    </tr>
+  `).join('');
+    }
+
+    // =====================================================================
+    // SUMMARY PAGE
+    // =====================================================================
+    function renderSummary() {
+      const data = RAW_DATA;
+      const total = data.length;
+      const statusCount = countBy(data, 'status');
+      const submitCount = countBy(data, 'submit');
+
+      // KPI
+      document.getElementById('summary-kpi').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">บันทึกทั้งหมด</div><div class="kpi-value blue" style="color:var(--primary)">${total}</div><div class="kpi-sub">รายการ</div></div>
+    <div class="kpi-card green"><div class="kpi-label">อัตราการมาเรียน</div><div class="kpi-value">${Math.round((statusCount['มาเรียน'] || 0) / total * 100)}%</div><div class="kpi-sub">จากทั้งหมด</div></div>
+    <div class="kpi-card red"><div class="kpi-label">อัตราการขาดเรียน</div><div class="kpi-value">${Math.round((statusCount['ขาด'] || 0) / total * 100)}%</div><div class="kpi-sub">จากทั้งหมด</div></div>
+    <div class="kpi-card"><div class="kpi-label" style="color:var(--danger)">ข้อผิดพลาดในข้อมูล</div><div class="kpi-value" style="color:var(--danger)">${ERRORS.length}</div><div class="kpi-sub">รายการที่พบ</div></div>
+  `;
+
+      // Status summary
+      const statuses = ['มาเรียน', 'ขาด', 'สาย', 'ลา'];
+      document.getElementById('summary-status').innerHTML = statuses.map(s => {
+        const cnt = statusCount[s] || 0;
+        const pct = Math.round(cnt / total * 100);
+        const color = COLOR_STATUS[s];
+        return `
+      <div class="stat-row">
+        <span>${s}</span>
+        <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%;background:${color}"></div></div>
+        <span class="stat-val">${cnt} <small style="font-weight:400;color:#5f6368">(${pct}%)</small></span>
+      </div>`;
+      }).join('');
+
+      // Submit summary
+      const sub = submitCount['ส่งแล้ว'] || 0;
+      const nsub = total - sub;
+      document.getElementById('summary-submit').innerHTML = [
+        { label: 'ส่งแล้ว', cnt: sub, color: '#34a853' },
+        { label: 'ยังไม่ส่ง', cnt: nsub, color: '#ea4335' },
+      ].map(({ label, cnt, color }) => {
+        const pct = Math.round(cnt / total * 100);
+        return `
+      <div class="stat-row">
+        <span>${label}</span>
+        <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%;background:${color}"></div></div>
+        <span class="stat-val">${cnt} <small style="font-weight:400;color:#5f6368">(${pct}%)</small></span>
+      </div>`;
+      }).join('');
+
+      // Room summary
+      const rooms = [...new Set(data.map(r => r.room))].sort();
+      document.getElementById('summary-room').innerHTML = rooms.map(rm => {
+        const rd = data.filter(r => r.room === rm);
+        const p = rd.filter(r => r.status === 'มาเรียน').length;
+        const pct = Math.round(p / rd.length * 100);
+        return `
+      <div class="stat-row">
+        <span>${rm}</span>
+        <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%;background:#1a73e8"></div></div>
+        <span class="stat-val">${p}/${rd.length} <small style="font-weight:400;color:#5f6368">(${pct}%)</small></span>
+      </div>`;
+      }).join('');
+
+      // Subject summary
+      const subjects = [...new Set(data.map(r => r.subject))].sort();
+      document.getElementById('summary-subject').innerHTML = subjects.map(sub => {
+        const sd = data.filter(r => r.subject === sub);
+        const p = sd.filter(r => r.status === 'มาเรียน').length;
+        const pct = Math.round(p / sd.length * 100);
+        return `
+      <div class="stat-row">
+        <span style="font-size:12px">${sub}</span>
+        <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%;background:#34a853"></div></div>
+        <span class="stat-val">${p}/${sd.length} <small style="font-weight:400;color:#5f6368">(${pct}%)</small></span>
+      </div>`;
+      }).join('');
+
+      // Student summary table
+      const students = [...new Set(data.map(r => r.student))].sort();
+      const tbody = document.getElementById('summary-student-tbl');
+      tbody.innerHTML = students.map(st => {
+        const sd = data.filter(r => r.student === st);
+        const p = sd.filter(r => r.status === 'มาเรียน').length;
+        const a = sd.filter(r => r.status === 'ขาด').length;
+        const l = sd.filter(r => r.status === 'สาย').length;
+        const lv = sd.filter(r => r.status === 'ลา').length;
+        const sub = sd.filter(r => r.submit === 'ส่งแล้ว').length;
+        const ns = sd.length - sub;
+        const pct = Math.round(p / sd.length * 100);
+        const badge = pct >= 80
+          ? '<span class="pill pill-green">ผ่านเกณฑ์</span>'
+          : '<span class="pill pill-red">ต้องติดตาม</span>';
+        return `<tr>
+      <td><b>${st}</b></td>
+      <td>${p}</td><td>${a}</td><td>${l}</td><td>${lv}</td>
+      <td>${sub}</td><td>${ns}</td>
+      <td>${pct}%</td>
+      <td>${badge}</td>
+    </tr>`;
+      }).join('');
+    }
+
+    // =====================================================================
+    // PAGE SWITCHING
+    // =====================================================================
+    const pageMap = {
+      dashboard: { title: 'แดชบอร์ดภาพรวม', render: renderDashboard },
+      attendance: { title: 'ข้อมูลการเข้าเรียน', render: renderTable },
+      errors: { title: 'ข้อผิดพลาด & เหตุผล', render: renderErrors },
+      summary: { title: 'สรุปข้อมูล', render: renderSummary },
+    };
+
+    function switchPage(page, el) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById('page-' + page).classList.add('active');
+      el.classList.add('active');
+      document.getElementById('page-title').textContent = pageMap[page].title;
+      pageMap[page].render();
+    }
+
+    // =====================================================================
+    // CLOCK
+    // =====================================================================
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clock').textContent =
+        now.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }) + '  ' +
+        now.toLocaleTimeString('th-TH');
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // =====================================================================
+    // INIT
+    // =====================================================================
+    renderDashboard();
+  </script>
+</body>
+
+</html>
